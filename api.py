@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timezone, timedelta
 import requests
@@ -179,10 +179,14 @@ LIGAS = [
     {"id": 533,  "nome": "Nemzeti Bajnokság (Hungria)"},
     {"id": 521,  "nome": "Liga MX (México)"},
     {"id": 474,  "nome": "Liga de Expansión MX"},
+    {"id": 325,  "nome": "Brasileirão Série A"},
     {"id": 390,  "nome": "Brasileirão Série B"},
+    {"id": 44,   "nome": "Liga Profesional Argentina"},
     {"id": 384,  "nome": "Copa Libertadores"},
     {"id": 480,  "nome": "Copa Sudamericana"},
     {"id": 288,  "nome": "Copa do Brasil"},
+    {"id": 955,  "nome": "Saudi Pro League"},
+    {"id": 242,  "nome": "MLS (EUA/Canadá)"},
     {"id": 600,  "nome": "J1 League (Japão)"},
     {"id": 573,  "nome": "K League 1 (Coreia do Sul)"},
     {"id": 481,  "nome": "Chinese Super League"},
@@ -196,6 +200,8 @@ LIGAS_IDS_CONFIRMADOS = [
     242, 325, 521, 384, 480, 600, 573, 481, 40,
     37, 508, 203, 116, 418, 188, 299, 16, 288, 32,
 ]
+
+# ── JOGOS ────────────────────────────────────────────────────────
 
 @app.route("/jogos/ao-vivo")
 def jogos_ao_vivo():
@@ -229,6 +235,8 @@ def jogos_data(data):
     sport = request.args.get("sport", "football")
     d     = get(f"/sport/{sport}/scheduled-events/{data}")
     return jsonify([montar_jogo(e) for e in d.get("events", [])])
+
+# ── DETALHE DO JOGO ──────────────────────────────────────────────
 
 @app.route("/jogo/<int:eid>")
 def detalhes_jogo(eid):
@@ -293,8 +301,7 @@ def h2h(eid):
 
 @app.route("/jogo/<int:eid>/odds")
 def odds(eid):
-    data = get_safe(f"/event/{eid}/odds/1/all", {})
-    return jsonify(data)
+    return jsonify(get_safe(f"/event/{eid}/odds/1/all", {}))
 
 @app.route("/jogo/<int:eid>/media")
 def media_jogo(eid):
@@ -308,6 +315,8 @@ def momentum_jogo(eid):
 @app.route("/jogo/<int:eid>/votos")
 def votos_jogo(eid):
     return jsonify(get_safe(f"/event/{eid}/votes", {}))
+
+# ── LIGAS / TORNEIOS ─────────────────────────────────────────────
 
 def _fmt_torneio(trn):
     tid = trn.get("id")
@@ -511,6 +520,8 @@ def melhores_ratings(tid, sid):
         })
     return jsonify(result)
 
+# ── CLUBE ────────────────────────────────────────────────────────
+
 @app.route("/clube/<int:tid>")
 def dados_clube(tid):
     data  = get(f"/team/{tid}")
@@ -605,8 +616,9 @@ def transferencias_clube(tid):
 
 @app.route("/clube/<int:tid>/estatisticas/<int:utid>/temporada/<int:sid>")
 def estatisticas_clube(tid, utid, sid):
-    data = get_safe(f"/team/{tid}/unique-tournament/{utid}/season/{sid}/statistics/overall", {})
-    return jsonify(data)
+    return jsonify(get_safe(f"/team/{tid}/unique-tournament/{utid}/season/{sid}/statistics/overall", {}))
+
+# ── JOGADOR ──────────────────────────────────────────────────────
 
 @app.route("/jogador/<int:pid>")
 def jogador(pid):
@@ -634,13 +646,11 @@ def jogador(pid):
 
 @app.route("/jogador/<int:pid>/estatisticas/<int:tid>/temporada/<int:sid>")
 def estatisticas_jogador(pid, tid, sid):
-    data = get(f"/player/{pid}/unique-tournament/{tid}/season/{sid}/statistics/overall")
-    return jsonify(data)
+    return jsonify(get(f"/player/{pid}/unique-tournament/{tid}/season/{sid}/statistics/overall"))
 
 @app.route("/jogador/<int:pid>/transferencias")
 def transferencias_jogador(pid):
-    data = get(f"/player/{pid}/transfer-history")
-    return jsonify(data)
+    return jsonify(get(f"/player/{pid}/transfer-history"))
 
 @app.route("/jogador/<int:pid>/jogos/recentes")
 def jogos_recentes_jogador(pid):
@@ -650,6 +660,8 @@ def jogos_recentes_jogador(pid):
 @app.route("/jogador/<int:pid>/heatmap/<int:tid>/temporada/<int:sid>")
 def heatmap_jogador(pid, tid, sid):
     return jsonify(get_safe(f"/player/{pid}/unique-tournament/{tid}/season/{sid}/heatmap/overall", {}))
+
+# ── ÁRBITRO ──────────────────────────────────────────────────────
 
 @app.route("/arbitro/<int:rid>")
 def arbitro(rid):
@@ -665,6 +677,8 @@ def arbitro(rid):
         "amarelos":  r.get("yellowCards"),
         "vermelhos": r.get("redCards"),
     })
+
+# ── PESQUISA ─────────────────────────────────────────────────────
 
 @app.route("/pesquisar/<string:query>")
 def pesquisar(query):
@@ -685,6 +699,8 @@ def pesquisar(query):
             "logo_url": f"{IMG}/{ikey}/{eid2}/image" if ikey and eid2 else None,
         })
     return jsonify(result)
+
+# ── META ─────────────────────────────────────────────────────────
 
 @app.route("/sports")
 def sports():
