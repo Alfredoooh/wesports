@@ -1,7 +1,9 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
 from datetime import datetime, timezone, timedelta
 import requests
+import random
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -10,82 +12,35 @@ BASE = "https://api.sofascore.com/api/v1"
 IMG  = "https://api.sofascore.com/api/v1"
 SITE = "https://www.sofascore.com"
 
-HEADERS = {
-    "User-Agent":      "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-    "Referer":         "https://www.sofascore.com/",
-    "Origin":          "https://www.sofascore.com",
-    "Accept":          "application/json, text/plain, */*",
-    "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
-    "Cache-Control":   "no-cache",
-    "Pragma":          "no-cache",
-}
-
-SPORTS = [
-    "football","basketball","tennis","ice-hockey","baseball",
-    "handball","volleyball","rugby","cricket","mma",
-    "american-football","esports","table-tennis","badminton",
-    "futsal","beach-volley","waterpolo","cycling","snooker",
-    "darts","aussie-rules","bandy","floorball","motorsport",
+USER_AGENTS = [
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ]
 
-LIGAS = [
-    {"id": 7,    "nome": "UEFA Champions League"},
-    {"id": 679,  "nome": "UEFA Europa League"},
-    {"id": 329,  "nome": "UEFA Conference League"},
-    {"id": 17,   "nome": "Premier League (Inglaterra)"},
-    {"id": 32,   "nome": "Championship (Inglaterra)"},
-    {"id": 36,   "nome": "League One (Inglaterra)"},
-    {"id": 1091, "nome": "FA Cup"},
-    {"id": 8,    "nome": "La Liga (Espanha)"},
-    {"id": 11,   "nome": "Segunda División (Espanha)"},
-    {"id": 23,   "nome": "Serie A (Itália)"},
-    {"id": 53,   "nome": "Serie B (Itália)"},
-    {"id": 560,  "nome": "Coppa Italia"},
-    {"id": 35,   "nome": "Bundesliga (Alemanha)"},
-    {"id": 44,   "nome": "2. Bundesliga (Alemanha)"},
-    {"id": 572,  "nome": "DFB Pokal"},
-    {"id": 34,   "nome": "Ligue 1 (França)"},
-    {"id": 182,  "nome": "Ligue 2 (França)"},
-    {"id": 238,  "nome": "Primeira Liga (Portugal)"},
-    {"id": 307,  "nome": "Taça de Portugal"},
-    {"id": 37,   "nome": "Eredivisie (Holanda)"},
-    {"id": 40,   "nome": "Super Lig (Turquia)"},
-    {"id": 203,  "nome": "Premier Liga (Rússia)"},
-    {"id": 242,  "nome": "Ekstraklasa (Polónia)"},
-    {"id": 116,  "nome": "Superliga (Dinamarca)"},
-    {"id": 955,  "nome": "Allsvenskan (Suécia)"},
-    {"id": 325,  "nome": "Eliteserien (Noruega)"},
-    {"id": 418,  "nome": "Super League (Suíça)"},
-    {"id": 406,  "nome": "Bundesliga (Áustria)"},
-    {"id": 187,  "nome": "Super League (Grécia)"},
-    {"id": 508,  "nome": "Premiership (Escócia)"},
-    {"id": 373,  "nome": "Liga Premier (Israel)"},
-    {"id": 533,  "nome": "Nemzeti Bajnokság (Hungria)"},
-    {"id": 521,  "nome": "Liga MX (México)"},
-    {"id": 474,  "nome": "Liga de Expansión MX"},
-    {"id": 390,  "nome": "Brasileirão Série B"},
-    {"id": 384,  "nome": "Copa Libertadores"},
-    {"id": 480,  "nome": "Copa Sudamericana"},
-    {"id": 288,  "nome": "Copa do Brasil"},
-    {"id": 600,  "nome": "J1 League (Japão)"},
-    {"id": 573,  "nome": "K League 1 (Coreia do Sul)"},
-    {"id": 481,  "nome": "Chinese Super League"},
-    {"id": 188,  "nome": "Indian Super League"},
-    {"id": 299,  "nome": "CAF Champions League"},
-    {"id": 16,   "nome": "UEFA Nations League"},
-]
-
-LIGAS_IDS_CONFIRMADOS = [
-    7, 679, 329, 17, 8, 23, 35, 34, 238, 955,
-    242, 325, 521, 384, 480, 600, 573, 481, 40,
-    37, 508, 203, 116, 418, 188, 299, 16, 288, 32,
-]
-
-def agora():
-    return datetime.now(timezone.utc)
+SESSION = requests.Session()
 
 def get(path):
-    r = requests.get(f"{BASE}{path}", headers=HEADERS, timeout=15)
+    ua = random.choice(USER_AGENTS)
+    headers = {
+        "User-Agent":         ua,
+        "Referer":            "https://www.sofascore.com/",
+        "Origin":             "https://www.sofascore.com",
+        "Accept":             "application/json, text/plain, */*",
+        "Accept-Language":    "pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding":    "gzip, deflate, br",
+        "Cache-Control":      "no-cache",
+        "Pragma":             "no-cache",
+        "Sec-Fetch-Dest":     "empty",
+        "Sec-Fetch-Mode":     "cors",
+        "Sec-Fetch-Site":     "same-origin",
+        "Sec-Ch-Ua":          '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile":   "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Connection":         "keep-alive",
+    }
+    r = SESSION.get(f"{BASE}{path}", headers=headers, timeout=15)
     r.raise_for_status()
     return r.json()
 
@@ -99,6 +54,9 @@ def ts(timestamp):
     if not timestamp:
         return None
     return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+def agora():
+    return datetime.now(timezone.utc)
 
 def equipa(t):
     if not t:
@@ -178,7 +136,66 @@ def montar_jogo(e):
         "inicio_formatado": ts(e.get("startTimestamp")),
     }
 
-# ── JOGOS ────────────────────────────────────────────────────────
+SPORTS = [
+    "football","basketball","tennis","ice-hockey","baseball",
+    "handball","volleyball","rugby","cricket","mma",
+    "american-football","esports","table-tennis","badminton",
+    "futsal","beach-volley","waterpolo","cycling","snooker",
+    "darts","aussie-rules","bandy","floorball","motorsport",
+]
+
+LIGAS = [
+    {"id": 7,    "nome": "UEFA Champions League"},
+    {"id": 679,  "nome": "UEFA Europa League"},
+    {"id": 329,  "nome": "UEFA Conference League"},
+    {"id": 17,   "nome": "Premier League (Inglaterra)"},
+    {"id": 32,   "nome": "Championship (Inglaterra)"},
+    {"id": 36,   "nome": "League One (Inglaterra)"},
+    {"id": 1091, "nome": "FA Cup"},
+    {"id": 8,    "nome": "La Liga (Espanha)"},
+    {"id": 11,   "nome": "Segunda División (Espanha)"},
+    {"id": 23,   "nome": "Serie A (Itália)"},
+    {"id": 53,   "nome": "Serie B (Itália)"},
+    {"id": 560,  "nome": "Coppa Italia"},
+    {"id": 35,   "nome": "Bundesliga (Alemanha)"},
+    {"id": 44,   "nome": "2. Bundesliga (Alemanha)"},
+    {"id": 572,  "nome": "DFB Pokal"},
+    {"id": 34,   "nome": "Ligue 1 (França)"},
+    {"id": 182,  "nome": "Ligue 2 (França)"},
+    {"id": 238,  "nome": "Primeira Liga (Portugal)"},
+    {"id": 307,  "nome": "Taça de Portugal"},
+    {"id": 37,   "nome": "Eredivisie (Holanda)"},
+    {"id": 40,   "nome": "Super Lig (Turquia)"},
+    {"id": 203,  "nome": "Premier Liga (Rússia)"},
+    {"id": 242,  "nome": "Ekstraklasa (Polónia)"},
+    {"id": 116,  "nome": "Superliga (Dinamarca)"},
+    {"id": 955,  "nome": "Allsvenskan (Suécia)"},
+    {"id": 325,  "nome": "Eliteserien (Noruega)"},
+    {"id": 418,  "nome": "Super League (Suíça)"},
+    {"id": 406,  "nome": "Bundesliga (Áustria)"},
+    {"id": 187,  "nome": "Super League (Grécia)"},
+    {"id": 508,  "nome": "Premiership (Escócia)"},
+    {"id": 373,  "nome": "Liga Premier (Israel)"},
+    {"id": 533,  "nome": "Nemzeti Bajnokság (Hungria)"},
+    {"id": 521,  "nome": "Liga MX (México)"},
+    {"id": 474,  "nome": "Liga de Expansión MX"},
+    {"id": 390,  "nome": "Brasileirão Série B"},
+    {"id": 384,  "nome": "Copa Libertadores"},
+    {"id": 480,  "nome": "Copa Sudamericana"},
+    {"id": 288,  "nome": "Copa do Brasil"},
+    {"id": 600,  "nome": "J1 League (Japão)"},
+    {"id": 573,  "nome": "K League 1 (Coreia do Sul)"},
+    {"id": 481,  "nome": "Chinese Super League"},
+    {"id": 188,  "nome": "Indian Super League"},
+    {"id": 299,  "nome": "CAF Champions League"},
+    {"id": 16,   "nome": "UEFA Nations League"},
+]
+
+LIGAS_IDS_CONFIRMADOS = [
+    7, 679, 329, 17, 8, 23, 35, 34, 238, 955,
+    242, 325, 521, 384, 480, 600, 573, 481, 40,
+    37, 508, 203, 116, 418, 188, 299, 16, 288, 32,
+]
 
 @app.route("/jogos/ao-vivo")
 def jogos_ao_vivo():
@@ -212,8 +229,6 @@ def jogos_data(data):
     sport = request.args.get("sport", "football")
     d     = get(f"/sport/{sport}/scheduled-events/{data}")
     return jsonify([montar_jogo(e) for e in d.get("events", [])])
-
-# ── DETALHE DO JOGO ──────────────────────────────────────────────
 
 @app.route("/jogo/<int:eid>")
 def detalhes_jogo(eid):
@@ -293,8 +308,6 @@ def momentum_jogo(eid):
 @app.route("/jogo/<int:eid>/votos")
 def votos_jogo(eid):
     return jsonify(get_safe(f"/event/{eid}/votes", {}))
-
-# ── LIGAS / TORNEIOS ─────────────────────────────────────────────
 
 def _fmt_torneio(trn):
     tid = trn.get("id")
@@ -498,8 +511,6 @@ def melhores_ratings(tid, sid):
         })
     return jsonify(result)
 
-# ── CLUBE ────────────────────────────────────────────────────────
-
 @app.route("/clube/<int:tid>")
 def dados_clube(tid):
     data  = get(f"/team/{tid}")
@@ -597,8 +608,6 @@ def estatisticas_clube(tid, utid, sid):
     data = get_safe(f"/team/{tid}/unique-tournament/{utid}/season/{sid}/statistics/overall", {})
     return jsonify(data)
 
-# ── JOGADOR ──────────────────────────────────────────────────────
-
 @app.route("/jogador/<int:pid>")
 def jogador(pid):
     data = get(f"/player/{pid}")
@@ -642,8 +651,6 @@ def jogos_recentes_jogador(pid):
 def heatmap_jogador(pid, tid, sid):
     return jsonify(get_safe(f"/player/{pid}/unique-tournament/{tid}/season/{sid}/heatmap/overall", {}))
 
-# ── ÁRBITRO ──────────────────────────────────────────────────────
-
 @app.route("/arbitro/<int:rid>")
 def arbitro(rid):
     data = get(f"/referee/{rid}")
@@ -658,8 +665,6 @@ def arbitro(rid):
         "amarelos":  r.get("yellowCards"),
         "vermelhos": r.get("redCards"),
     })
-
-# ── PESQUISA ─────────────────────────────────────────────────────
 
 @app.route("/pesquisar/<string:query>")
 def pesquisar(query):
@@ -681,8 +686,6 @@ def pesquisar(query):
         })
     return jsonify(result)
 
-# ── META ─────────────────────────────────────────────────────────
-
 @app.route("/sports")
 def sports():
     return jsonify(SPORTS)
@@ -698,6 +701,5 @@ def index():
     return jsonify(sorted(rotas, key=lambda x: x["rota"]))
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
