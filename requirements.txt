@@ -1,4 +1,10 @@
 flask
 flask-cors
+feedparser
+beautifulsoup4
 requests
-gunicorn
+newspaper3k
+lxml
+lxml-html-clean
+pillow
+nltk
