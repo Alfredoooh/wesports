@@ -1,0 +1,243 @@
+workflows:
+  android-release:
+    name: Android Release Build
+    max_build_duration: 60
+    environment:
+      java: 17
+    scripts:
+      - name: Download gradle-wrapper.jar
+        script: |
+          WRAPPER_DIR="${CM_BUILD_DIR}/gradle/wrapper"
+          mkdir -p "$WRAPPER_DIR"
+          JAR="$WRAPPER_DIR/gradle-wrapper.jar"
+          if [ ! -f "$JAR" ]; then
+            echo "A fazer download do gradle-wrapper.jar (Gradle 8.9)..."
+            curl -fsSL "https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -o "$JAR" \
+              || curl -fsSL "https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -o "$JAR" \
+              || wget -q "https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -O "$JAR"
+            echo "✅ gradle-wrapper.jar: $(du -sh $JAR | cut -f1)"
+          else
+            echo "✅ gradle-wrapper.jar já presente no repo"
+          fi
+
+      - name: Generate release keystore
+        script: |
+          keytool -genkeypair \
+            -alias "wilin_key" \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 9125 \
+            -keystore "${CM_BUILD_DIR}/app/wilin_release.keystore" \
+            -storepass "nuxx@2025" \
+            -keypass "nuxx@2025" \
+            -dname "CN=Developer, OU=Dev, O=Developer, L=Lisboa, ST=Lisboa, C=PT" \
+            -noprompt
+          echo "✅ Keystore gerado: app/wilin_release.keystore"
+
+      - name: Install Pillow
+        script: pip3 install Pillow --quiet
+
+      - name: Process launcher and splash icons
+        script: |
+          python3 << 'PYEOF'
+          import os, shutil
+          from PIL import Image, ImageDraw
+
+          CM  = os.environ["CM_BUILD_DIR"]
+          RES = os.path.join(CM, "app/src/main/res")
+          LAUNCHER = os.path.join(CM, "ic_launcher.png")
+          SPLASH   = os.path.join(CM, "splash_icon.png")
+
+          if not os.path.exists(LAUNCHER):
+              raise FileNotFoundError("ic_launcher.png nao encontrado na raiz do repo!")
+
+          DENSITIES = {
+              "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
+              "mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192
+          }
+          FG_SIZES = {
+              "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
+              "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
+          }
+
+          def rounded(img, size, ratio=0.23):
+              img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
+              mask = Image.new("L", (size, size), 0)
+              ImageDraw.Draw(mask).rounded_rectangle(
+                  [0, 0, size-1, size-1], radius=int(size*ratio), fill=255)
+              out = Image.new("RGBA", (size, size), (0,0,0,0))
+              out.paste(img, (0, 0), mask)
+              return out
+
+          def save(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          src = Image.open(LAUNCHER)
+          for d, sz in DENSITIES.items():
+              save(rounded(src, sz, 0.23), os.path.join(RES, d, "ic_launcher.png"))
+              save(rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
+
+          for d, fg in FG_SIZES.items():
+              icon_sz = int(fg * 0.66)
+              fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
+              canvas  = Image.new("RGBA", (fg, fg), (0,0,0,0))
+              off     = (fg - icon_sz) // 2
+              canvas.paste(fg_img, (off, off), fg_img)
+              save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
+
+          if os.path.exists(SPLASH):
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              shutil.copy2(SPLASH, dest)
+              print(f"  -> {dest}")
+          else:
+              print("AVISO: splash_icon.png nao encontrado, a usar placeholder...")
+              placeholder = Image.new("RGBA", (192, 192), (0,0,0,0))
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              placeholder.save(dest, "PNG")
+
+          print("Icones processados com sucesso!")
+          PYEOF
+
+      - name: Set executable permission on gradlew
+        script: chmod +x "${CM_BUILD_DIR}/gradlew"
+
+      - name: Build release APK
+        script: cd "${CM_BUILD_DIR}" && ./gradlew assembleRelease --no-daemon
+
+      - name: Build release AAB
+        script: cd "${CM_BUILD_DIR}" && ./gradlew bundleRelease --no-daemon
+
+    artifacts:
+      - app/build/outputs/apk/release/*.apk
+      - app/build/outputs/bundle/release/*.aab
+      - app/build/outputs/mapping/release/mapping.txt
+    publishing:
+      email:
+        recipients:
+          - dev@example.com
+        notify:
+          success: true
+          failure: true
+
+  android-debug:
+    name: Android Debug Build
+    max_build_duration: 30
+    environment:
+      java: 17
+    scripts:
+      - name: Download gradle-wrapper.jar
+        script: |
+          WRAPPER_DIR="${CM_BUILD_DIR}/gradle/wrapper"
+          mkdir -p "$WRAPPER_DIR"
+          JAR="$WRAPPER_DIR/gradle-wrapper.jar"
+          if [ ! -f "$JAR" ]; then
+            echo "A fazer download do gradle-wrapper.jar (Gradle 8.9)..."
+            curl -fsSL "https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -o "$JAR" \
+              || curl -fsSL "https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -o "$JAR" \
+              || wget -q "https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -O "$JAR"
+            echo "✅ gradle-wrapper.jar: $(du -sh $JAR | cut -f1)"
+          else
+            echo "✅ gradle-wrapper.jar já presente no repo"
+          fi
+
+      - name: Generate release keystore
+        script: |
+          keytool -genkeypair \
+            -alias "wilin_key" \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 9125 \
+            -keystore "${CM_BUILD_DIR}/app/wilin_release.keystore" \
+            -storepass "nuxx@2025" \
+            -keypass "nuxx@2025" \
+            -dname "CN=Developer, OU=Dev, O=Developer, L=Lisboa, ST=Lisboa, C=PT" \
+            -noprompt
+          echo "✅ Keystore gerado: app/wilin_release.keystore"
+
+      - name: Install Pillow
+        script: pip3 install Pillow --quiet
+
+      - name: Process launcher and splash icons
+        script: |
+          python3 << 'PYEOF'
+          import os, shutil
+          from PIL import Image, ImageDraw
+
+          CM  = os.environ["CM_BUILD_DIR"]
+          RES = os.path.join(CM, "app/src/main/res")
+          LAUNCHER = os.path.join(CM, "ic_launcher.png")
+          SPLASH   = os.path.join(CM, "splash_icon.png")
+
+          if not os.path.exists(LAUNCHER):
+              raise FileNotFoundError("ic_launcher.png nao encontrado na raiz do repo!")
+
+          DENSITIES = {
+              "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
+              "mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192
+          }
+          FG_SIZES = {
+              "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
+              "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
+          }
+
+          def rounded(img, size, ratio=0.23):
+              img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
+              mask = Image.new("L", (size, size), 0)
+              ImageDraw.Draw(mask).rounded_rectangle(
+                  [0, 0, size-1, size-1], radius=int(size*ratio), fill=255)
+              out = Image.new("RGBA", (size, size), (0,0,0,0))
+              out.paste(img, (0, 0), mask)
+              return out
+
+          def save(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          src = Image.open(LAUNCHER)
+          for d, sz in DENSITIES.items():
+              save(rounded(src, sz, 0.23), os.path.join(RES, d, "ic_launcher.png"))
+              save(rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
+
+          for d, fg in FG_SIZES.items():
+              icon_sz = int(fg * 0.66)
+              fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
+              canvas  = Image.new("RGBA", (fg, fg), (0,0,0,0))
+              off     = (fg - icon_sz) // 2
+              canvas.paste(fg_img, (off, off), fg_img)
+              save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
+
+          if os.path.exists(SPLASH):
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              shutil.copy2(SPLASH, dest)
+              print(f"  -> {dest}")
+          else:
+              print("AVISO: splash_icon.png nao encontrado, a usar placeholder...")
+              placeholder = Image.new("RGBA", (192, 192), (0,0,0,0))
+              dest = os.path.join(RES, "drawable", "splash_icon.png")
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              placeholder.save(dest, "PNG")
+
+          print("Icones processados com sucesso!")
+          PYEOF
+
+      - name: Set executable permission on gradlew
+        script: chmod +x "${CM_BUILD_DIR}/gradlew"
+
+      - name: Build debug APK
+        script: cd "${CM_BUILD_DIR}" && ./gradlew assembleDebug --no-daemon
+
+    artifacts:
+      - app/build/outputs/apk/debug/*.apk
+    publishing:
+      email:
+        recipients:
+          - dev@example.com
+        notify:
+          success: false
+          failure: true

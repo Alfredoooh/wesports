@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">wilin</string>
+    <string name="notification_channel_name">wilin</string>
+    <string name="notification_channel_desc">Mantém o wilin activo em segundo plano</string>
+</resources>
