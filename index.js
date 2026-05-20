@@ -9,20 +9,18 @@ const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 app.use(cors());
 
 const domains = [
-  // Unitel
+  'free.facebook.com',
+  'zero.facebook.com',
+  'www.facebook.com',
+  'graph.facebook.com',
+  'b-api.facebook.com',
+  'z-p3-upload.facebook.com',
   'www.unitel.ao',
   'unitel.ao',
   'internet.unitel.ao',
   'wap.unitel.ao',
-  // Movicel
   'www.movicel.ao',
   'movicel.ao',
-  // AfriConnect
-  'www.africonnect.ao',
-  // Globais
-  'www.google.com',
-  'www.cloudflare.com',
-  'www.akamai.com',
 ];
 
 function testSNI(domain) {
