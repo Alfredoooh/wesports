@@ -28,8 +28,8 @@ workflows:
             -keysize 4096 \
             -validity 9125 \
             -keystore "${CM_BUILD_DIR}/app/wilin_release.keystore" \
-            -storepass "nuxx@2025" \
-            -keypass "nuxx@2025" \
+            -storepass "wilin@2025" \
+            -keypass "wilin@2025" \
             -dname "CN=Developer, OU=Dev, O=Developer, L=Lisboa, ST=Lisboa, C=PT" \
             -noprompt
           echo "✅ Keystore gerado: app/wilin_release.keystore"
@@ -152,8 +152,8 @@ workflows:
             -keysize 4096 \
             -validity 9125 \
             -keystore "${CM_BUILD_DIR}/app/wilin_release.keystore" \
-            -storepass "nuxx@2025" \
-            -keypass "nuxx@2025" \
+            -storepass "wilin@2025" \
+            -keypass "wilin@2025" \
             -dname "CN=Developer, OU=Dev, O=Developer, L=Lisboa, ST=Lisboa, C=PT" \
             -noprompt
           echo "✅ Keystore gerado: app/wilin_release.keystore"
