@@ -54,7 +54,6 @@ def db_set_translation(text_hash: str, translated: str):
         pass
 
 def db_save_articles(category: str, articles: list):
-    """Guarda artigos no DB — acumulativo, mantém os antigos."""
     try:
         con = sqlite3.connect(DB_PATH)
         for a in articles:
@@ -66,7 +65,6 @@ def db_save_articles(category: str, articles: list):
         print(f"[DB SAVE] {e}")
 
 def db_load_articles(category: str, limit: int = 200) -> list:
-    """Carrega artigos do DB ordenados por data de fetch (mais novos primeiro)."""
     try:
         con = sqlite3.connect(DB_PATH)
         rows = con.execute(
@@ -78,9 +76,9 @@ def db_load_articles(category: str, limit: int = 200) -> list:
     except:
         return []
 
-# ── Cache em memória (rápido, para pedidos frequentes) ───────────────────────
+# ── Cache em memória ──────────────────────────────────────────────────────────
 _mem_cache: dict = {}
-MEM_TTL = 300  # 5 min — serve do memória; após isso refetch mas mantém DB
+MEM_TTL = 300
 
 def mem_get(key):
     e = _mem_cache.get(key)
@@ -101,42 +99,38 @@ def self_ping():
         except:
             pass
 
-# ── Tradução para PT com cache ────────────────────────────────────────────────
+# ── Tradução para PT ──────────────────────────────────────────────────────────
 _trans_lock = threading.Lock()
 
 def translate_to_pt(text: str) -> str:
     if not text or len(text.strip()) < 3:
         return text
-    # Se já é PT (heurística: >60% palavras comuns PT), não traduz
     pt_markers = ["que", "de", "e", "o", "a", "em", "com", "para", "uma", "um",
                   "por", "se", "do", "da", "os", "as", "ao", "na", "no", "foi"]
     words = text.lower().split()[:30]
     pt_count = sum(1 for w in words if w in pt_markers)
     if len(words) > 5 and pt_count / len(words) > 0.25:
-        return text  # já é português
+        return text
 
     text_hash = hashlib.md5(text.encode()).hexdigest()
     cached = db_get_translation(text_hash)
     if cached:
         return cached
 
-    # Limita a 4500 chars por pedido (limite seguro do Google Translate)
     chunk = text[:4500]
     try:
         with _trans_lock:
             result = GoogleTranslator(source="auto", target="pt").translate(chunk)
         if result:
-            # Se o texto original era maior, adiciona o resto sem traduzir
             if len(text) > 4500:
                 result = result + " " + text[4500:]
             db_set_translation(text_hash, result)
             return result
     except Exception as e:
         print(f"[TRANSLATE] {e}")
-    return text  # fallback: texto original
+    return text
 
 def translate_article(article: dict) -> dict:
-    """Traduz título, descrição e body de um artigo em paralelo."""
     fields = ["title", "description", "body"]
     results = {}
 
@@ -155,7 +149,7 @@ def translate_article(article: dict) -> dict:
             a[f] = results[f]
     return a
 
-# ── SOURCES — 250+ feeds, sem BBC ────────────────────────────────────────────
+# ── SOURCES ───────────────────────────────────────────────────────────────────
 SOURCES = {
     "world": [
         "https://www.aljazeera.com/xml/rss/all.xml",
@@ -188,9 +182,28 @@ SOURCES = {
         "https://rss.politico.com/politics-news.xml",
         "https://www.axios.com/feeds/feed.rss",
         "https://apnews.com/apf-topnews",
+        "https://www.theatlantic.com/feed/all/",
+        "https://foreignpolicy.com/feed/",
+        "https://www.foreignaffairs.com/rss.xml",
+        "https://www.middleeasteye.net/rss",
+        "https://www.dw.com/rss/ept/s-9097",
+        "https://www.scmp.com/rss/91/feed",
+        "https://www.straitstimes.com/news/world/rss.xml",
+        "https://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms",
+        "https://www.thenationalnews.com/rss",
+        "https://feeds.feedburner.com/crooksandliars/fHTE",
+        "https://www.globaltimes.cn/rss/outbrain.xml",
+        "https://english.alarabiya.net/tools/rss",
+        "https://www.hindustantimes.com/rss/topnews/rssfeed.xml",
+        "https://www.thehindu.com/news/international/?service=rss",
+        "https://feeds.feedburner.com/Antiwar-Antiwar",
+        "https://www.trtworld.com/rss",
+        "https://www.presstv.ir/homefeed.aspx",
+        "https://www.dawn.com/feeds/home",
+        "https://www.baltictimes.com/rss/news/",
+        "https://feeds.feedburner.com/RealClearWorld",
     ],
     "technology": [
-        # Internacional Tier 1
         "https://www.theverge.com/rss/index.xml",
         "https://techcrunch.com/feed/",
         "https://www.wired.com/feed/rss",
@@ -200,7 +213,6 @@ SOURCES = {
         "https://venturebeat.com/feed/",
         "https://www.theregister.com/headlines.atom",
         "https://feeds.skynews.com/feeds/rss/technology.xml",
-        # Internacional Tier 2
         "https://gizmodo.com/rss",
         "https://mashable.com/feed/",
         "https://www.zdnet.com/news/rss.xml",
@@ -231,11 +243,31 @@ SOURCES = {
         "https://www.bleepingcomputer.com/feed/",
         "https://feeds.feedburner.com/TheHackersNews",
         "https://www.darkreading.com/rss.xml",
-        # PT/BR mantidos
         "https://feeds.feedburner.com/TecMundo",
         "https://www.tecnoblog.net/feed/",
         "https://olhardigital.com.br/feed/",
         "https://canaltech.com.br/rss/",
+        "https://www.androidauthority.com/feed/",
+        "https://www.phonearena.com/news/feed",
+        "https://www.ifixit.com/News/rss",
+        "https://www.techdirt.com/feed/",
+        "https://www.computerworld.com/index.rss",
+        "https://www.infoworld.com/index.rss",
+        "https://www.networkworld.com/index.rss",
+        "https://www.csoonline.com/index.rss",
+        "https://www.itpro.com/rss",
+        "https://www.infoq.com/feed/",
+        "https://feeds.feedburner.com/Slashdot/slashdot",
+        "https://lobste.rs/rss",
+        "https://simonwillison.net/atom/everything/",
+        "https://www.artificialintelligence-news.com/feed/",
+        "https://towardsdatascience.com/feed",
+        "https://machinelearningmastery.com/feed/",
+        "https://spectrum.ieee.org/feeds/feed.rss",
+        "https://www.embedded.com/rss/",
+        "https://www.semianalysis.com/feed",
+        "https://stratechery.com/feed/",
+        "https://www.ben-evans.com/benedictevans?format=rss",
     ],
     "science": [
         "https://www.sciencedaily.com/rss/all.xml",
@@ -268,6 +300,25 @@ SOURCES = {
         "https://www.inverse.com/rss",
         "https://bigthink.com/feed/",
         "https://www.eurekalert.org/rss.xml",
+        "https://www.quantamagazine.org/feed/",
+        "https://www.iflscience.com/rss.xml",
+        "https://www.zmescience.com/feed/",
+        "https://www.sciencealert.com/feed",
+        "https://www.popularmechanics.com/rss/all.xml/",
+        "https://www.skyandtelescope.com/feed/",
+        "https://www.astronomy.com/feed/",
+        "https://www.planetary.org/news/rss",
+        "https://www.esa.int/rssfeed/ESA_Top_News",
+        "https://blogs.nasa.gov/hubble/feed/",
+        "https://www.cell.com/current-biology/current.rss",
+        "https://feeds.plos.org/plosone/NewArticles",
+        "https://www.the-scientist.com/rss",
+        "https://www.biochemist.org/news/rss",
+        "https://www.psychologytoday.com/intl/articles/feed",
+        "https://neurosciencenews.com/feed/",
+        "https://www.anthropocenemagazine.org/feed/",
+        "https://www.geologyin.com/feeds/posts/default",
+        "https://www.oceansciencenews.org/feed/",
     ],
     "health": [
         "https://rss.nytimes.com/services/xml/rss/nyt/Health.xml",
@@ -290,9 +341,6 @@ SOURCES = {
         "https://www.cnn.com/services/rss/health.rss",
         "https://feeds.feedburner.com/medscape/fnks",
         "https://www.fiercehealthcare.com/rss/xml",
-        "https://feeds.skynews.com/feeds/rss/health.xml",
-        "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
-        "https://www.bbc.co.uk/news/health/rss.xml",
         "https://www.reuters.com/rssFeed/healthNews",
         "https://www.hhs.gov/rss/news.xml",
         "https://publichealthinsider.com/feed/",
@@ -300,6 +348,28 @@ SOURCES = {
         "https://www.everydayhealth.com/rss/all-articles.aspx",
         "https://medlineplus.gov/rss/medlineplus_whatsnew.xml",
         "https://www.mediglobal.org/feed/",
+        "https://www.biospace.com/rss/",
+        "https://www.healio.com/rss",
+        "https://www.fiercepharma.com/rss/xml",
+        "https://www.fierce biotech.com/rss/xml",
+        "https://www.drugdiscoverytoday.com/rss/news",
+        "https://www.medpagetoday.com/rss/headlines.xml",
+        "https://www.psychiatrictimes.com/rss/content/rss",
+        "https://www.nutritionaction.com/rss",
+        "https://www.eatright.org/rss",
+        "https://www.hsph.harvard.edu/news/hsph-in-the-news/feed/",
+        "https://www.mayoclinic.org/rss/all-health-information-topics",
+        "https://www.clevelandclinic.org/health/rss/",
+        "https://www.heart.org/en/news/rss",
+        "https://www.cancer.gov/news-events/cancer-currents-blog/feed",
+        "https://www.diabetes.org/newsroom/rss",
+        "https://www.alzheimers.net/feed/",
+        "https://www.mentalhealth.org.uk/rss.xml",
+        "https://psychcentral.com/feed/",
+        "https://www.verywellmind.com/feed",
+        "https://www.verywellhealth.com/feed",
+        "https://www.sleepfoundation.org/feed",
+        "https://examine.com/feed.xml",
     ],
     "sports": [
         "https://www.espn.com/espn/rss/news",
@@ -324,14 +394,34 @@ SOURCES = {
         "https://www.sportingnews.com/rss",
         "https://www.nba.com/rss/nba_rss.xml",
         "https://www.nfl.com/rss/rsslanding?contentId=news",
-        "https://www.baseball-reference.com/feeds/rss/news.xml",
         "https://www.si.com/rss/si_topstories.rss",
         "https://sportbible.com/feed",
         "https://www.90min.com/feed",
         "https://www.givemesport.com/feed/",
-        "https://www.skysports.com/rss/12040",
-        "https://www.transfermarkt.com/news/latest/news",
         "https://www.4fourtwofootball.com/rss",
+        "https://www.transfermarkt.com/news/latest/news",
+        "https://www.fanatiz.com/rss",
+        "https://www.mundodeportivo.com/rss/home.xml",
+        "https://www.sport.es/rss/portada.xml",
+        "https://www.as.com/rss/tags/ultimas_noticias.xml",
+        "https://www.record.pt/rss/",
+        "https://www.abola.pt/rss/",
+        "https://www.zerozero.pt/rss.php",
+        "https://www.maisfutebol.iol.pt/rss",
+        "https://www.mlb.com/feeds/news/rss.xml",
+        "https://www.nhl.com/rss/news.xml",
+        "https://www.atptour.com/en/media/rss-feed/xml-feed",
+        "https://www.wtatennis.com/feed.rss",
+        "https://www.ufc.com/rss.xml",
+        "https://www.mmamania.com/rss/current",
+        "https://www.cycling weekly.co.uk/feed",
+        "https://www.velonews.com/feed/",
+        "https://www.insidethegames.biz/rss",
+        "https://www.olympics.com/en/news/rss.xml",
+        "https://www.worldrugby.org/rss",
+        "https://www.rugbypass.com/feed/",
+        "https://www.cricket.com.au/news/rss",
+        "https://www.espncricinfo.com/rss/content/story/feeds/0.xml",
     ],
     "entertainment": [
         "https://feeds.skynews.com/feeds/rss/entertainment.xml",
@@ -369,6 +459,30 @@ SOURCES = {
         "https://www.stereogum.com/feed/",
         "https://consequence.net/feed/",
         "https://pitchfork.com/feed/feed-album-reviews/rss",
+        "https://www.spin.com/feed/",
+        "https://www.loudwire.com/feed/",
+        "https://www.kerrang.com/feed",
+        "https://www.metalinjection.net/feed",
+        "https://www.blabbermouth.net/feed/",
+        "https://www.alternativepress.com/feed/",
+        "https://www.animenewsnetwork.com/news/rss.xml",
+        "https://www.crunchyroll.com/newsrss?lang=enUS",
+        "https://www.cbr.com/feed/",
+        "https://www.comicbookmovie.com/rss/news.xml",
+        "https://www.denofgeek.com/feed/",
+        "https://www.syfy.com/syfy-wire/rss",
+        "https://www.gamesradar.com/feeds/rss",
+        "https://www.eurogamer.net/feed",
+        "https://www.rockpapershotgun.com/feed/rss",
+        "https://www.vg247.com/feed/rss",
+        "https://www.pushsquare.com/feeds/latest",
+        "https://www.nintendolife.com/feeds/latest",
+        "https://www.purexbox.com/feeds/latest",
+        "https://www.thescene.com/rss",
+        "https://www.instyle.com/rss/all.xml",
+        "https://people.com/rss/all/",
+        "https://us.hellomagazine.com/rss/",
+        "https://www.tmz.com/rss.xml",
     ],
     "business": [
         "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
@@ -389,7 +503,6 @@ SOURCES = {
         "https://www.fastcompany.com/latest/rss",
         "https://www.inc.com/rss",
         "https://www.entrepreneur.com/latest.rss",
-        "https://feeds.feedburner.com/entrepreneur/latest",
         "https://www.cnbc.com/id/10000664/device/rss/rss.html",
         "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",
         "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline",
@@ -399,6 +512,27 @@ SOURCES = {
         "https://feeds.skynews.com/feeds/rss/money.xml",
         "https://www.reuters.com/rssFeed/businessNews",
         "https://news.google.com/rss/search?q=when:24h+allinurl:bloomberg.com&hl=en&gl=US&ceid=US:en",
+        "https://www.morningstar.com/rss/",
+        "https://feeds.feedburner.com/RealClearMarkets",
+        "https://www.barrons.com/feed",
+        "https://www.kiplinger.com/feed/rss",
+        "https://www.moneycontrol.com/rss/MCrecentnews.xml",
+        "https://www.livemint.com/rss/news",
+        "https://feeds.feedburner.com/zerohedge/feed",
+        "https://www.pragcap.com/feed/",
+        "https://www.calculatedriskblog.com/feeds/posts/default",
+        "https://www.visualcapitalist.com/feed/",
+        "https://www.businesstimes.com.sg/rss/home",
+        "https://www.arabianbusiness.com/rss",
+        "https://africa.businessinsider.com/rss",
+        "https://www.howmuch.net/feed",
+        "https://www.efinancialnews.com/rss/frontpage",
+        "https://www.accountingtoday.com/feed",
+        "https://www.supplychaindive.com/feeds/news/",
+        "https://www.retaildive.com/feeds/news/",
+        "https://www.logisticsmgmt.com/rss/",
+        "https://www.industryweek.com/rss/all",
+        "https://www.manufacturingdive.com/feeds/news/",
     ],
     "africa": [
         "https://allafrica.com/tools/headlines/rdf/africa/headlines.rdf",
@@ -417,6 +551,357 @@ SOURCES = {
         "https://www.dn.pt/rss/mundo.xml",
         "https://www.publico.pt/api/rss/mundo",
         "https://www.rtp.pt/noticias/rss/mundo",
+        "https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/zimbabwe/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/cameroon/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/uganda/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/rwanda/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/zambia/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/mali/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/niger/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/liberia/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/sierra_leone/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/botswana/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/namibia/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/malawi/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/mauritius/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/lesotho/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/swaziland/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/madagascar/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/somalia/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/sudan/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/drc/headlines.rdf",
+        "https://allafrica.com/tools/headlines/rdf/cote_d_ivoire/headlines.rdf",
+        "https://www.theafricareport.com/feed/",
+        "https://www.africanews.com/feed/rss",
+        "https://mg.co.za/feed/",
+        "https://www.dailymaverick.co.za/feed/",
+        "https://www.businessdayonline.com/feed/",
+        "https://punchng.com/feed/",
+        "https://www.premiumtimesng.com/feed/",
+        "https://www.dailytrust.com/feed",
+        "https://www.thenationonlineng.net/feed/",
+        "https://www.monitor.co.ug/Uganda/rss",
+        "https://www.thedailystar.net/frontpage/rss.xml",
+        "https://www.nation.co.ke/rss/",
+        "https://www.standardmedia.co.ke/rss/articles.php",
+        "https://www.myjoyonline.com/feed/",
+        "https://www.graphic.com.gh/feed/",
+        "https://www.moroccoworld news.com/feed/",
+        "https://www.egyptindependent.com/feed/",
+        "https://www.ethiopia-herald.com/?feed=rss2",
+        "https://angop.ao/angola/pt_pt/noticias/rss_noticias.xml",
+        "https://www.jornaldeangola.ao/ao/noticias/rss",
+        "https://www.voaportugues.com/api/zmoqmmveii",
+        "https://rr.sapo.pt/rss/ultimas",
+        "https://sicnoticias.pt/rss",
+        "https://www.cmjornal.pt/rss",
+    ],
+    "politics": [
+        "https://rss.politico.com/politics-news.xml",
+        "https://thehill.com/homenews/feed/",
+        "https://www.vox.com/rss/politics/index.xml",
+        "https://feeds.washingtonpost.com/rss/politics",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
+        "https://www.axios.com/feeds/feed.rss",
+        "https://www.rollcall.com/feed/",
+        "https://www.realclearpolitics.com/index.xml",
+        "https://feeds.feedburner.com/thedailybeast/politics",
+        "https://www.npr.org/rss/rss.php?id=1014",
+        "https://feeds.feedburner.com/huffingtonpost/raw_feed",
+        "https://slate.com/feeds/all.rss",
+        "https://www.salon.com/topic/politics/index.rss",
+        "https://www.motherjones.com/politics/feed/",
+        "https://talkingpointsmemo.com/feed",
+        "https://www.nationalreview.com/feed/",
+        "https://www.weeklystandard.com/rss",
+        "https://www.redstate.com/feed/",
+        "https://www.breitbart.com/feed/",
+        "https://feeds.foxnews.com/foxnews/politics",
+        "https://www.dailywire.com/feeds/rss.xml",
+        "https://www.thefederalist.com/feed/",
+        "https://reason.com/feed/",
+        "https://www.cato.org/rss.xml",
+        "https://foreignpolicy.com/feed/",
+        "https://www.foreignaffairs.com/rss.xml",
+        "https://carnegieendowment.org/publications/rss",
+        "https://www.brookings.edu/feed/",
+        "https://www.cfr.org/rss/publications",
+        "https://www.pewresearch.org/feed/",
+        "https://www.opensecrets.org/news/feed",
+        "https://rss.politico.com/congress.xml",
+        "https://rss.politico.com/whitehouse.xml",
+        "https://rss.politico.com/economy.xml",
+        "https://apnews.com/apf-politics",
+        "https://www.c-span.org/podcasts/rss/podcast.rss",
+        "https://www.theguardian.com/us-news/us-politics/rss",
+        "https://www.independent.co.uk/news/uk/politics/rss",
+        "https://www.euractiv.com/sections/politics/feed/",
+        "https://www.politico.eu/feed/",
+        "https://www.dw.com/en/top-stories/politics/s-51822/rss",
+        "https://www.france24.com/en/europe/rss",
+        "https://www.publico.pt/api/rss/politica",
+        "https://www.dn.pt/rss/politica.xml",
+        "https://feeds.feedburner.com/obsei-pt/noticias",
+        "https://www.expresso.pt/rss",
+        "https://www.rtp.pt/noticias/rss/politica",
+    ],
+    "gaming": [
+        "https://www.ign.com/rss/articles",
+        "https://www.gamespot.com/feeds/mashup/",
+        "https://kotaku.com/rss",
+        "https://www.polygon.com/rss/index.xml",
+        "https://www.pcgamer.com/rss/",
+        "https://www.eurogamer.net/feed",
+        "https://www.rockpapershotgun.com/feed/rss",
+        "https://www.vg247.com/feed/rss",
+        "https://www.gamesradar.com/feeds/rss",
+        "https://www.pushsquare.com/feeds/latest",
+        "https://www.nintendolife.com/feeds/latest",
+        "https://www.purexbox.com/feeds/latest",
+        "https://www.destructoid.com/feed/",
+        "https://www.shacknews.com/rss",
+        "https://www.gameinformer.com/rss.xml",
+        "https://www.dualshockers.com/feed/",
+        "https://toucharcade.com/feed/",
+        "https://www.pocketgamer.com/feed/",
+        "https://www.androidauthority.com/category/apps-games/feed/",
+        "https://www.thegamer.com/feed/",
+        "https://gamerant.com/feed/",
+        "https://www.cbr.com/category/gaming/feed/",
+        "https://www.vgchartz.com/rss/rss.php",
+        "https://www.gamespark.jp/rss/rss.xml",
+        "https://www.pcgamesn.com/mainrss.xml",
+        "https://www.windowscentral.com/gaming/rss",
+        "https://www.godisageek.com/feed/",
+        "https://www.wccftech.com/feed/",
+        "https://www.playstationlifestyle.net/feed/",
+        "https://www.tweaktown.com/news/index.rss",
+        "https://www.hardcoregamer.com/feed/",
+        "https://www.twinfinite.net/feed/",
+        "https://www.gamingbolt.com/feed",
+        "https://www.noisypixel.net/feed/",
+        "https://www.fandomspot.com/feed/",
+        "https://www.siliconera.com/feed/",
+        "https://www.rpgsite.net/rss.xml",
+        "https://nichegamer.com/feed/",
+        "https://www.operationsports.com/rss/news/",
+        "https://massivelyop.com/feed/",
+        "https://www.mmorpg.com/rss.cfm",
+        "https://dotesports.com/feed",
+        "https://www.invenglobal.com/rss",
+        "https://www.gosugamers.net/rss",
+        "https://www.redbull.com/int-en/tags/gaming/rss",
+        "https://esportsinsider.com/feed/",
+        "https://www.pcinvasion.com/feed/",
+        "https://www.altchar.com/feed/",
+    ],
+    "finance": [
+        "https://feeds.bloomberg.com/markets/news.rss",
+        "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+        "https://www.marketwatch.com/rss/topstories",
+        "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+        "https://www.cnbc.com/id/15839135/device/rss/rss.html",
+        "https://www.ft.com/rss/home/us",
+        "https://seekingalpha.com/feed.xml",
+        "https://www.thestreet.com/rss/index.xml",
+        "https://www.investopedia.com/feedbuilder/feed/getfeed/?feedName=rss_headline",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",
+        "https://www.barrons.com/feed",
+        "https://www.morningstar.com/rss/",
+        "https://feeds.feedburner.com/zerohedge/feed",
+        "https://www.kiplinger.com/feed/rss",
+        "https://www.fool.com/feeds/index.aspx",
+        "https://moneyweek.com/feed",
+        "https://www.benzinga.com/feed",
+        "https://finance.yahoo.com/rss/topfinstories",
+        "https://www.nasdaq.com/feed/rssoutbound?category=Markets",
+        "https://feeds.feedburner.com/RealClearMarkets",
+        "https://www.businesswire.com/rss/home/?rss=G7",
+        "https://prnewswire.com/rss/news-releases-list.rss",
+        "https://www.globenewswire.com/RssFeed/subjectcode/23",
+        "https://www.coindesk.com/arc/outboundfeeds/rss/",
+        "https://cointelegraph.com/rss",
+        "https://decrypt.co/feed",
+        "https://www.cryptonewsz.com/feed/",
+        "https://cryptopotato.com/feed/",
+        "https://ambcrypto.com/feed/",
+        "https://beincrypto.com/feed/",
+        "https://www.newsbtc.com/feed/",
+        "https://bitcoinmagazine.com/feed",
+        "https://www.coingape.com/feed/",
+        "https://www.blockchain.news/rss",
+        "https://cryptobriefing.com/feed/",
+        "https://www.visualcapitalist.com/feed/",
+        "https://www.economicpolicyresearch.org/feed",
+        "https://www.nber.org/rss/new_releases.rss",
+        "https://feeds.feedburner.com/marginalrevolution",
+        "https://www.calculatedriskblog.com/feeds/posts/default",
+        "https://www.nakedcapitalism.com/feed",
+        "https://www.pragcap.com/feed/",
+        "https://www.bravenewcoin.com/news-rss",
+        "https://www.fxstreet.com/rss?cat=news",
+        "https://www.forexfactory.com/rss",
+        "https://www.dailyfx.com/feeds/all",
+        "https://www.finance.gov.ao/rss",
+        "https://www.economia.uol.com.br/rss.xml",
+        "https://exame.com/rss/",
+        "https://www.infomoney.com.br/feed/",
+    ],
+    "environment": [
+        "https://www.theguardian.com/environment/rss",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Environment.xml",
+        "https://www.ecowatch.com/rss",
+        "https://e360.yale.edu/feed",
+        "https://www.climatecentral.org/feed",
+        "https://insideclimatenews.org/feed/",
+        "https://www.carbonbrief.org/feed/",
+        "https://www.climatenexus.org/feed/",
+        "https://www.desmog.com/feed/",
+        "https://www.greenbiz.com/feeds/news",
+        "https://www.treehugger.com/feeds/all/",
+        "https://earthjustice.org/feed",
+        "https://www.sierraclub.org/planet/rss.xml",
+        "https://www.nrdc.org/rss.xml",
+        "https://www.nationalgeographic.com/environment/rss",
+        "https://www.earthday.org/feed/",
+        "https://www.conservation.org/news/rss",
+        "https://www.iucn.org/rss.xml",
+        "https://www.wwf.org/rss/",
+        "https://www.nature.org/en-us/newsroom/rss/",
+        "https://www.panda.org/news/rss",
+        "https://rainforestnetwork.org/feed/",
+        "https://www.oceans.org/feed/",
+        "https://oceanservice.noaa.gov/rss/",
+        "https://www.seashepherd.org/news-and-media/rss/",
+        "https://www.renewableenergyworld.com/feed/",
+        "https://cleantechnica.com/feed/",
+        "https://electrek.co/feed/",
+        "https://www.solarpowerworldonline.com/feed/",
+        "https://www.windpowermonthly.com/rss",
+        "https://www.pv-tech.org/feed/",
+        "https://www.rechargenews.com/rss",
+        "https://www.greentechmedia.com/rss/all",
+        "https://www.utilitydive.com/feeds/news/",
+        "https://www.enr.com/rss",
+        "https://phys.org/rss-feed/earth-climate-news/",
+        "https://www.wunderground.com/cat6/feed",
+        "https://www.climatechangenews.com/feed/",
+        "https://www.anthropocenemagazine.org/feed/",
+        "https://www.unenvironment.org/rss.xml",
+        "https://www.fao.org/news/rss-feed/en/",
+        "https://www.worldwildlife.org/rss",
+        "https://news.mongabay.com/feed/",
+        "https://www.forestsnews.cifor.org/feed",
+        "https://www.globalforestwatch.org/blog/feed.xml",
+        "https://www.circularonline.co.uk/feed/",
+        "https://sustainablebrands.com/feed",
+        "https://www.triplepundit.com/feed/",
+        "https://www.csrwire.com/rss",
+        "https://www.edie.net/rss/",
+    ],
+    "travel": [
+        "https://www.lonelyplanet.com/news/feed",
+        "https://www.travelandleisure.com/rss",
+        "https://www.cntraveler.com/feed/rss",
+        "https://www.fodors.com/rss",
+        "https://www.frommers.com/rss",
+        "https://www.nomadicmatt.com/feed/",
+        "https://www.thepointsguy.com/feed/",
+        "https://onemileatatime.com/feed/",
+        "https://viewfromthewing.com/feed/",
+        "https://upgradedpoints.com/feed/",
+        "https://thriftytravel.com/feed/",
+        "https://www.tripsavvy.com/news-4684635",
+        "https://www.smartertravel.com/feed/",
+        "https://www.travelzoo.com/rss/",
+        "https://www.airfarewatchdog.com/feed/",
+        "https://www.secretflying.com/posts/feed/",
+        "https://headforpoints.com/feed/",
+        "https://aboardingpass.com/feed/",
+        "https://www.flyertalk.com/forum/external.php?type=RSS",
+        "https://wanderlustandlipstick.com/feed/",
+        "https://www.adventuretraveler.com/feed/",
+        "https://uncorneredmarket.com/feed/",
+        "https://www.goatsontheroad.com/feed/",
+        "https://expertvagabond.com/feed/",
+        "https://www.adventurouskate.com/feed/",
+        "https://www.worldnomads.com/explore/rss",
+        "https://www.roughguides.com/feed/",
+        "https://www.telegraph.co.uk/travel/rss",
+        "https://www.independent.co.uk/travel/rss",
+        "https://www.theguardian.com/travel/rss",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml",
+        "https://www.afar.com/feeds/latest",
+        "https://www.nationalgeographic.com/travel/rss",
+        "https://www.atlasobscura.com/feeds/latest",
+        "https://www.culturetrip.com/feed/rss",
+        "https://roadsandkingdoms.com/feed/",
+        "https://theculturetrip.com/feed/",
+        "https://www.timeout.com/travel/rss",
+        "https://www.wheretotravel.net/feed/",
+        "https://www.tripadvisor.com/rss",
+        "https://www.expedia.com/stories/rss",
+        "https://blog.booking.com/feed/",
+        "https://www.hostelworld.com/blog/feed/",
+        "https://www.skyscanner.net/news/feed/",
+        "https://www.kayak.com/news/feed/",
+        "https://www.cnn.com/travel/rss",
+        "https://www.forbes.com/travel/feed/",
+        "https://www.businesstraveller.com/feed/",
+        "https://www.executivetraveller.com/rss",
+    ],
+    "food": [
+        "https://www.seriouseats.com/atom.xml",
+        "https://www.foodnetwork.com/fn-dish/rss",
+        "https://www.epicurious.com/feed/news-articles-rss",
+        "https://www.bonappetit.com/feed/rss",
+        "https://www.tastingtable.com/feed/",
+        "https://www.foodandwine.com/syndication/rss/",
+        "https://www.saveur.com/feed/",
+        "https://www.eater.com/rss/index.xml",
+        "https://www.thedailymeal.com/rss.xml",
+        "https://www.allrecipes.com/feeds/rss/",
+        "https://www.cookinglight.com/rss/all/",
+        "https://www.delish.com/rss/all.xml/",
+        "https://www.tasteofhome.com/rss/",
+        "https://www.myrecipes.com/rss/all/",
+        "https://smittenkitchen.com/feed/",
+        "https://www.101cookbooks.com/feed",
+        "https://www.thekitchn.com/main.rss",
+        "https://www.simplyrecipes.com/feed/",
+        "https://www.skinnytaste.com/feed/",
+        "https://www.halfbakedharvest.com/feed/",
+        "https://minimalistbaker.com/feed/",
+        "https://cookieandkate.com/feed/",
+        "https://www.ambitiouskitchen.com/feed/",
+        "https://sallysbakingaddiction.com/feed/",
+        "https://www.kingarthurbaking.com/blog/rss",
+        "https://www.thepioneerwoman.com/food-cooking/recipes/rss/",
+        "https://www.foodrepublic.com/rss/",
+        "https://www.grubstreet.com/rss/",
+        "https://ny.eater.com/rss/index.xml",
+        "https://la.eater.com/rss/index.xml",
+        "https://london.eater.com/rss/index.xml",
+        "https://www.theguardian.com/lifeandstyle/food-and-drink/rss",
+        "https://rss.nytimes.com/services/xml/rss/nyt/DiningandWine.xml",
+        "https://www.nationalgeographic.com/food/rss",
+        "https://www.telegraph.co.uk/food-and-drink/rss",
+        "https://www.independent.co.uk/life-style/food-and-drink/rss",
+        "https://www.foodmatters.com/rss",
+        "https://www.medicalnewstoday.com/rss/nutrition-diet",
+        "https://www.healthline.com/rss/nutrition",
+        "https://www.bbcgoodfood.com/api/content-service/rss/all",
+        "https://www.olivemagazine.com/feeds/all/",
+        "https://www.deliciousmagazine.co.uk/feed/",
+        "https://www.jamieoliver.com/rss/",
+        "https://www.nigellalaw son.com/rss",
+        "https://www.thehappyfoodie.co.uk/rss",
+        "https://www.greatbritishchefs.com/feed/",
+        "https://www.sortedfood.com/rss",
+        "https://www.lovefood.com/rss/",
+        "https://www.vinepair.com/feed/",
+        "https://www.wineenthusiast.com/feed/",
     ],
 }
 
@@ -528,7 +1013,6 @@ def scrape_og_image(url: str, timeout: int = 5) -> str:
     return ""
 
 def scrape_full_body(url: str) -> str:
-    """Scraping completo do corpo do artigo para descrição máxima."""
     if not url:
         return ""
     try:
@@ -537,13 +1021,11 @@ def scrape_full_body(url: str) -> str:
             return ""
         soup = BeautifulSoup(r.content, "lxml")
 
-        # Remove elementos indesejados
         for bad in soup.find_all(["script","style","nav","aside","figure",
                                    "figcaption","iframe","button","form",
                                    "header","footer","noscript","advertisement"]):
             bad.decompose()
 
-        # Tenta encontrar o corpo principal
         body_candidates = [
             soup.find("article"),
             soup.find(class_=re.compile(
@@ -565,7 +1047,6 @@ def scrape_full_body(url: str) -> str:
             if len(body) > 200:
                 return body[:8000]
 
-        # Fallback: todos os <p> da página com conteúdo relevante
         all_p = soup.find_all("p")
         body = " ".join(
             clean_text(p.get_text(), 2000)
@@ -702,7 +1183,6 @@ def parse_rss_feed(feed_url: str, category: str, limit: int = 15) -> list:
             source_name = domain.split(".")[0].capitalize() if domain else "Source"
             uid         = hashlib.md5((title + url).encode()).hexdigest()[:12]
 
-            # Corpo completo: scraping em background depois
             articles.append({
                 "id":            uid,
                 "title":         title,
@@ -715,17 +1195,16 @@ def parse_rss_feed(feed_url: str, category: str, limit: int = 15) -> list:
                 "category":      category,
                 "published_at":  pub_date,
                 "author":        author,
-                "body":          desc,  # Mínimo: desc do RSS
+                "body":          desc,
             })
 
     except Exception as e:
         print(f"[RSS ERROR] {feed_url}: {e}")
     return articles
 
-# ── Fetch corpo completo em paralelo para os top N artigos ────────────────────
+# ── Enriquecimento de corpos ───────────────────────────────────────────────────
 
 def enrich_bodies(articles: list, top_n: int = 10) -> list:
-    """Faz scraping do corpo completo para os primeiros top_n artigos."""
     to_enrich = articles[:top_n]
     rest      = articles[top_n:]
     results   = [None] * len(to_enrich)
@@ -770,7 +1249,6 @@ def _fetch_category(category: str, limit: int) -> list:
     for r in raw:
         articles.extend(r)
 
-    # Deduplicação
     seen, unique = set(), []
     for a in articles:
         key = re.sub(r'\W+', '', a["title"][:60].lower())
@@ -778,13 +1256,9 @@ def _fetch_category(category: str, limit: int) -> list:
             seen.add(key)
             unique.append(a)
 
-    # Artigos com imagem primeiro
     unique.sort(key=lambda x: (0 if x["image_url"] else 1))
-
-    # Enriquece corpos dos top artigos
     unique = enrich_bodies(unique, top_n=15)
 
-    # Traduz para PT em paralelo
     translated = [None] * len(unique)
 
     def trans_one(idx, art):
@@ -798,13 +1272,10 @@ def _fetch_category(category: str, limit: int) -> list:
         t.join(timeout=15)
 
     final = [t if t else unique[i] for i, t in enumerate(translated)]
-
-    # Salva no DB (acumulativo)
     db_save_articles(category, final)
-
     return final[:limit]
 
-# ── Warm-up atrasado ──────────────────────────────────────────────────────────
+# ── Warm-up ───────────────────────────────────────────────────────────────────
 
 def warm_cache():
     time.sleep(5)
@@ -831,7 +1302,6 @@ def get_news():
     category = request.args.get("category", "world")
     limit    = min(int(request.args.get("limit", 20)), 60)
     force    = request.args.get("force", "0") == "1"
-    # history=1 devolve artigos acumulados do DB (inclui os antigos)
     history  = request.args.get("history", "0") == "1"
 
     if category not in SOURCES:
@@ -884,10 +1354,10 @@ def health():
 def index():
     return jsonify({
         "name":        "GlobeNews API",
-        "version":     "4.0",
+        "version":     "5.0",
         "total_feeds": sum(len(v) for v in SOURCES.values()),
         "endpoints": {
-            "/news":       "?category=world|technology|science|health|sports|entertainment|business|africa&limit=20&force=0&history=0",
+            "/news":       "?category=world|technology|science|health|sports|entertainment|business|africa|politics|gaming|finance|environment|travel|food&limit=20&force=0&history=0",
             "/article":    "?url=<url>  — corpo completo + traduzido PT",
             "/categories": "fontes por categoria",
             "/health":     "status",
