@@ -1,12 +1,14 @@
 import os, re, time, json, threading, hashlib, sqlite3
 import requests
 from flask import Flask, jsonify, request, abort
+from flask_cors import CORS
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 from deep_translator import GoogleTranslator
 
 app = Flask(__name__)
+CORS(app)
 
 # ── Limites de concorrência ───────────────────────────────────────────────────
 # Máx de threads de rede simultâneas para não explodir memória
