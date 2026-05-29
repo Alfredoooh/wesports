@@ -987,25 +987,6 @@ def _fetch_category(category: str, limit: int, warm: bool = False) -> list:
 
 # ── Warm-up SEQUENCIAL (não paralelo!) ───────────────────────────────────────
 
-def warm_cache():
-    time.sleep(30)
-    print("[WARM] A iniciar pré-cache sequencial...")
-    cats = ["world", "technology", "sports"]  # só 3 categorias
-    for cat in cats:
-        try:
-            key = f"cat_{cat}_20"
-            if not mem_get(key):
-                arts = _fetch_category(cat, 10, warm=True)  # limit 10 em vez de 20
-                mem_set(key, arts)
-                print(f"[WARM] '{cat}' → {len(arts)} artigos")
-        except Exception as e:
-            print(f"[WARM ERROR] {cat}: {e}")
-        time.sleep(30)  # 30s entre categorias em vez de 8s
-    print("[WARM] Concluído.")
-
-threading.Thread(target=self_ping,  daemon=True).start()
-threading.Thread(target=warm_cache, daemon=True).start()
-
 # ── Rotas ─────────────────────────────────────────────────────────────────────
 
 @app.route("/news")
