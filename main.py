@@ -12,8 +12,8 @@ CORS(app)
 
 # ── Limites de concorrência ───────────────────────────────────────────────────
 # Máx de threads de rede simultâneas para não explodir memória
-_net_sem   = threading.Semaphore(8)   # scraping/RSS
-_trans_sem = threading.Semaphore(3)   # traduções
+_net_sem   = threading.Semaphore(4)   # scraping/RSS
+_trans_sem = threading.Semaphore(2)   # traduções
 
 DB_PATH = "/tmp/globenews.db"
 
@@ -988,20 +988,19 @@ def _fetch_category(category: str, limit: int, warm: bool = False) -> list:
 # ── Warm-up SEQUENCIAL (não paralelo!) ───────────────────────────────────────
 
 def warm_cache():
-    """Pré-cache sequencial — uma categoria de cada vez para poupar RAM."""
-    time.sleep(10)
+    time.sleep(30)
     print("[WARM] A iniciar pré-cache sequencial...")
-    cats = list(SOURCES.keys())
+    cats = ["world", "technology", "sports"]  # só 3 categorias
     for cat in cats:
         try:
             key = f"cat_{cat}_20"
             if not mem_get(key):
-                arts = _fetch_category(cat, 20, warm=True)  # warm=True: sem scraping extra
+                arts = _fetch_category(cat, 10, warm=True)  # limit 10 em vez de 20
                 mem_set(key, arts)
                 print(f"[WARM] '{cat}' → {len(arts)} artigos")
         except Exception as e:
             print(f"[WARM ERROR] {cat}: {e}")
-        time.sleep(8)  # Pausa entre categorias — liberta memória
+        time.sleep(30)  # 30s entre categorias em vez de 8s
     print("[WARM] Concluído.")
 
 threading.Thread(target=self_ping,  daemon=True).start()
